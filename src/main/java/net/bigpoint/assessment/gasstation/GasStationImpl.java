@@ -103,5 +103,4 @@ public class GasStationImpl implements GasStation {
 	public void setPrice(GasType type, double price) {
 		gasPrices.put(type, price);
 	}
-
 }
