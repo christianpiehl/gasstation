@@ -122,7 +122,6 @@ public class GasStationTest {
 			// ignore
 		}
 		assertFalse(isExceptionThrown);
-
 	}
 
 	@Test
