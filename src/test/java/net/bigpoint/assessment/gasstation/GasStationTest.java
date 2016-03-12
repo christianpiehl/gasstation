@@ -41,7 +41,6 @@ public class GasStationTest {
 
 		GasPump regularGasPump2 = new GasPump(REGULAR, 200);
 		gasStation.addGasPump(regularGasPump2);
-
 	}
 
 	@Test()
