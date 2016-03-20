@@ -4,8 +4,6 @@ import static net.bigpoint.assessment.gasstation.GasType.DIESEL;
 import static net.bigpoint.assessment.gasstation.GasType.REGULAR;
 import static net.bigpoint.assessment.gasstation.GasType.SUPER;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 import java.util.Collection;
 
@@ -19,9 +17,115 @@ public class GasStationTest {
 
 	private GasStation gasStation;
 
-	private static final double regularPrice = 1.40;
-	private static final double superPrice = 1.42;
-	private static final double dieselPrice = 1.20;
+	private final double regularPrice = 1.40;
+	private final double superPrice = 1.42;
+	private final double dieselPrice = 1.20;
+
+	private final double superStartAmount = 200;
+	private final double dieselStartAmount = 150;
+	private final double regularStartAmount1 = 100;
+	private final double regularStartAmount2 = 200;
+
+	@Test(expected = GasTooExpensiveException.class)
+	public void buyGas_gasTooExpensive() throws Exception {
+		gasStation.buyGas(SUPER, 50, 1.41);
+	}
+
+	@Test(expected = NotEnoughGasException.class)
+	public void buyGas_notEnoughGas() throws Exception {
+		gasStation.buyGas(DIESEL, 151, 1.5);
+	}
+
+	@Test
+	public void buyGas_numberCancellationsNoGas() {
+		try {
+			gasStation.buyGas(SUPER, 201, 1.42);
+		} catch (Exception e) {
+			// ignore
+		}
+		int expectedCancellations = 1;
+		int cancellations = gasStation.getNumberOfCancellationsNoGas();
+		assertEquals(expectedCancellations, cancellations, 0);
+	}
+
+	@Test
+	public void buyGas_numberCancellationsTooExpensive() {
+		try {
+			gasStation.buyGas(SUPER, 50, 1.41);
+		} catch (Exception e) {
+			// ignore
+		}
+		int expectedCancellations = 1;
+		int cancellations = gasStation.getNumberOfCancellationsTooExpensive();
+		assertEquals(expectedCancellations, cancellations, 0);
+	}
+
+	@Test
+	public void buyGas_numberOfSales() throws Exception {
+		gasStation.buyGas(SUPER, 50, 1.42);
+		int expectedNumberOfSales = 1;
+		int numberOfSales = gasStation.getNumberOfSales();
+		assertEquals(expectedNumberOfSales, numberOfSales, 0);
+	}
+
+	@Test
+	public void buyGas_numberOfSalesNotChangedByCancellations() {
+		try {
+			gasStation.buyGas(SUPER, 201, 1.42);
+		} catch (NotEnoughGasException | GasTooExpensiveException e) {
+			// ignore
+		}
+		try {
+			gasStation.buyGas(SUPER, 50, 1.20);
+		} catch (NotEnoughGasException | GasTooExpensiveException e) {
+			// ignore
+		}
+
+		int expectedNumberOfSales = 0;
+		int numberOfSales = gasStation.getNumberOfSales();
+		assertEquals(expectedNumberOfSales, numberOfSales, 0);
+	}
+
+	@Test
+	public void buyGas_remainingAmount() throws Exception {
+		double amount = 5;
+		gasStation.buyGas(SUPER, amount, 1.42);
+		double remainingAmount = 0;
+		for (GasPump gasPump : gasStation.getGasPumps()) {
+			if (gasPump.getGasType() == GasType.SUPER) {
+				remainingAmount = gasPump.getRemainingAmount();
+			}
+		}
+		double expectedAmount = superStartAmount - amount;
+		assertEquals(expectedAmount, remainingAmount, 0);
+	}
+
+	@Test
+	public void buyGas_revenue() throws Exception {
+		double amount = 5;
+		gasStation.buyGas(SUPER, amount, 1.42);
+		double revenue = gasStation.getRevenue();
+		double expectedRevenue = amount * superPrice;
+		assertEquals(expectedRevenue, revenue, 0);
+	}
+
+	@Test(expected = UnsupportedOperationException.class)
+	public void getGasPumps_add() {
+		Collection<GasPump> gasPumps = gasStation.getGasPumps();
+		gasPumps.add(new GasPump(SUPER, 100));
+	}
+
+	@Test(expected = UnsupportedOperationException.class)
+	public void getGasPumps_clear() {
+		Collection<GasPump> gasPumps = gasStation.getGasPumps();
+		gasPumps.clear();
+	}
+
+	@Test
+	public void setPrice_normalBehaviour() {
+		gasStation.setPrice(SUPER, regularPrice);
+		assertEquals(regularPrice, gasStation.getPrice(SUPER), 0);
+	}
 
 	@Before
 	public void setUpGasStation() {
@@ -30,160 +134,26 @@ public class GasStationTest {
 		gasStation.setPrice(REGULAR, regularPrice);
 		gasStation.setPrice(SUPER, superPrice);
 
-		GasPump superGasPump = new GasPump(SUPER, 200);
+		GasPump superGasPump = new GasPump(SUPER, superStartAmount);
 		gasStation.addGasPump(superGasPump);
 
-		GasPump dieselGasPump = new GasPump(DIESEL, 150);
+		GasPump dieselGasPump = new GasPump(DIESEL, dieselStartAmount);
 		gasStation.addGasPump(dieselGasPump);
 
-		GasPump regularGasPump = new GasPump(REGULAR, 100);
+		GasPump regularGasPump = new GasPump(REGULAR, regularStartAmount1);
 		gasStation.addGasPump(regularGasPump);
 
-		GasPump regularGasPump2 = new GasPump(REGULAR, 200);
+		GasPump regularGasPump2 = new GasPump(REGULAR, regularStartAmount2);
 		gasStation.addGasPump(regularGasPump2);
 	}
 
-	@Test()
-	public void testGasPumps() {
-		Collection<GasPump> gasPumps = gasStation.getGasPumps();
-		assertEquals(gasPumps.size(), 4);
-
-		boolean isExceptionThrown = false;
-		try {
-			gasPumps.add(new GasPump(SUPER, 100));
-		} catch (UnsupportedOperationException uoe) {
-			isExceptionThrown = true;
-		}
-		assertTrue(isExceptionThrown);
-
-		isExceptionThrown = false;
-		try {
-			gasPumps.clear();
-		} catch (UnsupportedOperationException uoe) {
-			isExceptionThrown = true;
-		}
-		assertTrue(isExceptionThrown);
-	}
-
 	@Test
-	public void testGasPrices() {
-		assertEquals(superPrice, gasStation.getPrice(SUPER), 0);
-		assertEquals(regularPrice, gasStation.getPrice(REGULAR), 0);
-		assertEquals(dieselPrice, gasStation.getPrice(DIESEL), 0);
-
-		gasStation.setPrice(SUPER, regularPrice);
-		assertEquals(regularPrice, gasStation.getPrice(SUPER), 0);
-
-		gasStation.setPrice(REGULAR, dieselPrice);
-		assertEquals(dieselPrice, gasStation.getPrice(REGULAR), 0);
-
-		gasStation.setPrice(DIESEL, superPrice);
-		assertEquals(superPrice, gasStation.getPrice(DIESEL), 0);
-	}
-
-	@Test
-	public void testBuyGasExceptions() {
-		boolean isExceptionThrown = false;
-		try {
-			gasStation.buyGas(SUPER, 50, 1.41);
-		} catch (NotEnoughGasException nege) {
-			// ignore
-		} catch (GasTooExpensiveException gtee) {
-			isExceptionThrown = true;
-		}
-		assertTrue(isExceptionThrown);
-
-		isExceptionThrown = false;
-		try {
-			gasStation.buyGas(SUPER, 50, 1.42);
-		} catch (NotEnoughGasException nege) {
-			// ignore
-		} catch (GasTooExpensiveException gtee) {
-			isExceptionThrown = true;
-		}
-		assertFalse(isExceptionThrown);
-
-		isExceptionThrown = false;
-		try {
-			gasStation.buyGas(DIESEL, 151, 1.5);
-		} catch (NotEnoughGasException nege) {
-			isExceptionThrown = true;
-		} catch (GasTooExpensiveException gtee) {
-			// ignore
-		}
-		assertTrue(isExceptionThrown);
-
-		isExceptionThrown = false;
-		try {
-			gasStation.buyGas(DIESEL, 150, 1.5);
-		} catch (NotEnoughGasException nege) {
-			isExceptionThrown = true;
-		} catch (GasTooExpensiveException gtee) {
-			// ignore
-		}
-		assertFalse(isExceptionThrown);
-	}
-
-	@Test
-	public void testSimplePumpings() {
-		assertEquals(0, gasStation.getNumberOfCancellationsNoGas());
-		assertEquals(0, gasStation.getNumberOfCancellationsTooExpensive());
-		assertEquals(0, gasStation.getNumberOfSales());
-		assertEquals(0, gasStation.getRevenue(), 0);
-
-		double gasStationPrice = 0;
-		try {
-			gasStationPrice = gasStation.buyGas(SUPER, 50, superPrice);
-		} catch (NotEnoughGasException | GasTooExpensiveException e) {
-			assertTrue(false);
-		}
-		double expectedPrice = 50 * superPrice;
-		double expectedRevenue = expectedPrice;
-		assertEquals(expectedPrice, gasStationPrice, 0);
-
-		assertEquals(0, gasStation.getNumberOfCancellationsNoGas());
-		assertEquals(0, gasStation.getNumberOfCancellationsTooExpensive());
-		assertEquals(1, gasStation.getNumberOfSales());
-		assertEquals(expectedRevenue, gasStation.getRevenue(), 0);
-
-		try {
-			gasStationPrice = gasStation.buyGas(SUPER, 150, 1.42);
-		} catch (NotEnoughGasException | GasTooExpensiveException e) {
-			assertTrue(false);
-		}
-		expectedPrice = 150 * superPrice;
-		expectedRevenue += expectedPrice;
-		assertEquals(expectedPrice, gasStationPrice, 0);
-
-		assertEquals(0, gasStation.getNumberOfCancellationsNoGas());
-		assertEquals(0, gasStation.getNumberOfCancellationsTooExpensive());
-		assertEquals(2, gasStation.getNumberOfSales());
-		assertEquals(expectedRevenue, gasStation.getRevenue(), 0);
-
-		try {
-			gasStationPrice = gasStation.buyGas(SUPER, 1, 1.5);
-		} catch (NotEnoughGasException | GasTooExpensiveException e) {
-			// ignore
-		}
-		assertEquals(1, gasStation.getNumberOfCancellationsNoGas());
-		assertEquals(0, gasStation.getNumberOfCancellationsTooExpensive());
-		assertEquals(2, gasStation.getNumberOfSales());
-		assertEquals(expectedRevenue, gasStation.getRevenue(), 0);
-
-		try {
-			gasStationPrice = gasStation.buyGas(SUPER, 1, 1.3);
-		} catch (NotEnoughGasException | GasTooExpensiveException e) {
-			// ignore
-		}
-		assertEquals(1, gasStation.getNumberOfCancellationsNoGas());
-		assertEquals(1, gasStation.getNumberOfCancellationsTooExpensive());
-		assertEquals(2, gasStation.getNumberOfSales());
-		assertEquals(expectedRevenue, gasStation.getRevenue(), 0);
-	}
-
-	@Test
-	public void testMultiCustomer() {
-
+	public void buyGas_multiCustomer() {
+		/*
+		 * Regarding your hints this is no good test-method. But right now I
+		 * have no better idea how to test the multi-threaded access to the gas
+		 * station.
+		 */
 		TestGasCustomer customer1 = new TestGasCustomer(1000, SUPER, 30, 1.50, gasStation);
 		TestGasCustomer customer2 = new TestGasCustomer(1200, DIESEL, 60, 1.50, gasStation);
 		TestGasCustomer customer3 = new TestGasCustomer(1300, REGULAR, 30, 1.50, gasStation);
@@ -225,9 +195,7 @@ public class GasStationTest {
 			}
 		}
 		assertEquals(30, remainingDiesel, 0);
-		assertEquals(30,  remainingRegular, 0);
-		assertEquals(20,  remainingSuper, 0);
-
+		assertEquals(30, remainingRegular, 0);
+		assertEquals(20, remainingSuper, 0);
 	}
-
 }

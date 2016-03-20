@@ -17,61 +17,114 @@ public class GasStationImpl implements GasStation {
 
 	private Map<GasType, Double> gasPrices;
 	private List<GasPump> gasPumps;
+	private List<GasPump> gasPumpsInUse;
 
-	private int numberOfCancellationsTooExpensive;
-	private int numberOfCancellationsNoGas;
-	private int numberOfSales;
+	private Integer numberOfCancellationsTooExpensive;
+	private Integer numberOfCancellationsNoGas;
+	private Integer numberOfSales;
 
-	private double revenue;
+	private Double revenue;
 
 	public GasStationImpl() {
 		gasPrices = new HashMap<GasType, Double>();
 		gasPumps = new ArrayList<GasPump>();
+		gasPumpsInUse = new ArrayList<>();
+		numberOfCancellationsTooExpensive = 0;
+		numberOfCancellationsNoGas = 0;
+		numberOfSales = 0;
+		revenue = 0.0;
 	}
 
 	@Override
-	public synchronized void addGasPump(GasPump pump) {
-		gasPumps.add(pump);
+	public void addGasPump(GasPump pump) {
+		synchronized (gasPumps) {
+			gasPumps.add(pump);
+		}
 	}
 
-	// synch
 	@Override
-	public synchronized double buyGas(GasType type, double amountInLiters, double maxPricePerLiter)
+	public double buyGas(GasType type, double amountInLiters, double maxPricePerLiter)
 			throws NotEnoughGasException, GasTooExpensiveException {
-		double result = 0;
+		double result;
 		double gasPrice = getPrice(type);
 		if (gasPrice > maxPricePerLiter) {
-			numberOfCancellationsTooExpensive++;
+			incNumberOfCancellationsTooExpensive();
 			throw new GasTooExpensiveException();
 		} else {
-			boolean hasPumped = false;
-			for (GasPump gasPump : gasPumps) {
-				if (gasPump.getGasType().equals(type) && gasPump.getRemainingAmount() >= amountInLiters) {
-					gasPump.pumpGas(amountInLiters);
-					result = gasPrice * amountInLiters;
-					revenue += result;
-					numberOfSales++;
-					hasPumped = true;
-					break;
-				} else {
-					continue;
-				}
-			}
-
-			if (!hasPumped) {
-				numberOfCancellationsNoGas++;
+			GasPump gasPump = occupyGasPump(type, amountInLiters);
+			if (gasPump == null) {
+				result = 0;
+				incNumberOfCancellationsNoGas();
+				// using a third exception when all gas pumps are occupied would
+				// be a better solution
 				throw new NotEnoughGasException();
 			} else {
-				// nothing to do
+				gasPump.pumpGas(amountInLiters);
+				result = gasPrice * amountInLiters;
+				addToRevenue(result);
+				incNumberOfSales();
+				freeGasPump(gasPump);
 			}
 		}
 		return result;
+	}
 
+	private void freeGasPump(GasPump gasPump) {
+		synchronized (gasPumpsInUse) {
+			gasPumpsInUse.remove(gasPump);
+		}
+	}
+
+	private void addToRevenue(double money) {
+		synchronized (revenue) {
+			revenue += money;
+		}
+	}
+
+	private GasPump occupyGasPump(GasType gasType, double amountInLiters) {
+		GasPump result = null;
+		synchronized (gasPumps) {
+			synchronized (gasPumpsInUse) {
+				for (GasPump gasPump : gasPumps) {
+					if (gasPump.getGasType().equals(gasType) && gasPump.getRemainingAmount() >= amountInLiters
+							&& !gasPumpsInUse.contains(gasPump)) {
+						result = gasPump;
+						gasPumpsInUse.add(gasPump);
+						break;
+					} else {
+						continue;
+					}
+				}
+			}
+		}
+		return result;
+	}
+
+	private void incNumberOfCancellationsNoGas() {
+		synchronized (numberOfCancellationsNoGas) {
+			numberOfCancellationsNoGas++;
+		}
+	}
+
+	private void incNumberOfSales() {
+		synchronized (numberOfSales) {
+			numberOfSales++;
+		}
+	}
+
+	private void incNumberOfCancellationsTooExpensive() {
+		synchronized (numberOfCancellationsTooExpensive) {
+			numberOfCancellationsTooExpensive++;
+		}
 	}
 
 	@Override
 	public Collection<GasPump> getGasPumps() {
-		return Collections.unmodifiableCollection(gasPumps);
+		Collection<GasPump> result;
+		synchronized (gasPumps) {
+			result = Collections.unmodifiableCollection(gasPumps);
+		}
+		return result;
 	}
 
 	@Override
